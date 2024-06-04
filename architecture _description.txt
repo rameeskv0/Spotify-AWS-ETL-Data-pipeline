@@ -1,0 +1,14 @@
+architecture :::
+
+
+extract data from spotify (using python and devlpr ac of spotify) and use cloudwatch in aws to trigger the extraction ,we put the python code in the lambda of aws for extraction and put the data in s3
+
+
+when data reached s3 ,it again transform using lambda and we use "aws crawler" identify the columns and schemas in the data.
+
+
+Athena (sql qaury engine) in aws is further used to do further analytcs
+
+
+
+(h.w-->need to import the data whenever data reached in s3 into snowflake,by eliminating crawler part)

@@ -1,0 +1,115 @@
+step1::
+
+goto "spotify for developers" in google seacrh-->goto dashboard-->create new app
+give name and description(any)  and try to give Redirect URLs as "http://localhost:8888/callback" 
+
+step2::create a new jupyter notebook in the spark/projects/ETL_pipeline_spotify directry
+
+in the jupyter notebook::
+
+!pip install spotipy (library interact with spotify)
+
+our objective is to get top 100 albums details
+
+Write the script to scrap or extract data from spotify (eg:getting top 100 songs) 
+
+code_link: https://github.com/ansel9618/AWS-ETL-Data-pipeline/blob/main/spotify.ipynb
+
+here is the code to extract data from spotify,
+
+here we done some transformation like converting album list,song_listetc into a dataframe
+
+
+step2::
+
+now we want the code integrate with aws resources
+
+stpe3::
+
+AWS PART
+
+goto aws console 
+
+here first we want to set cloud watch to set timing and set alert to get notified ,for that we want to setup budget >> for that goto CloudWAatch page>>cloudwatch>>alarms>>billings>>create alarm>>select metric as Billing>>add name and desc and also give threshold (to avoid over budget without our knowledge we use this alarm)
+
+
+2)create new s3 Bucket::
+
+where raw data from spotify api which we transformed needs to fall
+
+create new bucket as "spotify-bucket" and create new subfolder in it as "raw_data"(to store extracted data directly from spotify) and "transformed_data"(to store transformed data which we created by applying python code extracted data)
+
+
+inside raw_data? folder create 2 subfolder in it as "processed" and to_processed (to store processed data and to be proceesed data separtly to avoid duplication) 
+
+inside transformed_data folder create 3 subfolders album_data,artist_data,songs_data
+
+3)next step is to create a lambda function to put code for extraction and putting data into s3?raw_data>>automation(its a serverless computing,no need of RAM or other things in our local system)
+
+
+for that goto "Lambda" >> create function >> give name as "spotify_extract" >> select python 3.8 in Runtime interprtr >> selct x86 Arch >> click on Create
+
+
+now we want to set configuration to set API details of Spotify for extraction
+for that goto created Lambda function "spotify_extract >> configuration >> env variables>> edit >> add env >> add key value of API (client id and access client_id="cfdc499b1dab4c68bb18cb92043f79e5",
+                                                    client_secret="5b7e13f844bc4b84bc88b68c63bfb5c2")
+
+try add to both one by one (now this lambda function can extract data drom that API)
+
+now goto fucntion created >> code >> lambda_function.py file 
+
+and add code from "C:\Users\0rame\Desktop\Spark\projects\ETL_pipeline_spotify\Spotify_extracting.ipynb"
+
+(remove all existing code and add code for extraction and automation)
+(lambda will not accept external library like spotipy ...therfre need to create e layer >> for that goto Layers in the Lambda function created and follow step in  add layer >> create layer >> give name as "spotifyextractionlayer" >>and select the zip file from "C:\Users\0rame\Downloads\spotipy_layer.zip" ) >>  select x86 >>runtime = python 3.8  >> create layer
+
+if you change the code click "deploy" and execute it by clicking "Test".otherwise previous code will be executed
+
+now we want to add the spotifyextractionlayer layer to our lambda function >> code >> add layer >> custom layers >> select Version = 1 >>  add
+
+
+to chnage the timeout error >> goto spotify_extract >> configuration >> time_out >> edit >> chane time_out to 1 minute(60 seconds) >> save
+
+
+4)we want to attach policies to communicate aws resources to comminicate with each other (we need boto3 to communicate while coding)
+
+Lambda function's configuration >> Role name (spotify_extract-role-eli7yfh2) >> permission >> attach policy >> s3fullaccess >> add 
+
+
+to put extracted data into s3 using lambda we use boto3 as
+
+
+client = boto3.client('s3')
+    
+    filename = "spotify_raw" + str(datetime.now() + ".json")
+    
+    client.put_object(
+        Bucket = "spotify-ramees-bucket",
+        Key = "",
+        Body = json.dumps(data))
+
+
+
+
+use the same role while creating new function also ie for "spotifyetl_transform" lambda function also
+
+
+try to test (execute) first lambda function (spotify_extract) 3 times to get 3 files in spotify-ramees-bucket/raw_data/to_processed/ bcs spotify update top 100 music list in every seconds .and we are using their api therfre we will gwt 3 different files
+
+
+
+
+Trigger setting 
+
+
+goto lambda function (spotify extract first) >> Add trigger >> select source as "EventBridge_cloudwatch" >> select create new rule >> give rule_name as "daily_1_min"  and description >>select Rule type as "Schedule expression" and give as  rate(1 minute)
+
+now to set 2nd trigger to put data into s3 need to set another trigger for the lambda function (spotifyetl_transform) >> goto "spotifyetl_transform" function >> add layer >> select source as "S3" from dropwdown >>  choose bucket "spotify-ramees-bucket" >> select event type "All object create events" >> prefix as "raw_data/ to_processed/" (in which file trigger wants to happen)and suffix as ".json" 
+
+
+now need to set permsion to activate this trigger to connect lambda function and s3. >> goto configuration >>  Role name spotify_extract-role-eli7yfh2  >> add permission >>  attach policy >> search for "AWSLambdaRole"  and add
+
+
+try to delete objects in all folder bucket to check the weather the trigger is working fine
+
+try to shutdown the trigger (otherwise bill will reach maximum)
